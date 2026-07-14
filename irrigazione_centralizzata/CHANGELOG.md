@@ -1,3 +1,10 @@
+## 0.2.4
+
+- Aggiunto il pulsante **Salta zona** direttamente sulla zona in corso.
+- Aggiunta la possibilità di escludere una zona ancora in attesa prima che venga eseguita.
+- Le zone saltate preventivamente vengono ignorate dal motore e registrate nel log.
+- Migliorato il riepilogo del programma in corso con stato e azioni per ogni zona.
+
 ## 0.2.3
 
 - Vista completa del programma in corso con stato di ogni zona.

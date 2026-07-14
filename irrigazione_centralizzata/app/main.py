@@ -196,6 +196,7 @@ class Runtime:
         self.task: asyncio.Task | None = None
         self.stop_event = asyncio.Event()
         self.skip_event = asyncio.Event()
+        self.future_skips: set[int] = set()
         self.state: dict[str, Any] = {
             "running": False,
             "paused": False,
@@ -264,6 +265,7 @@ def rowdict(row: sqlite3.Row) -> dict[str, Any]:
 async def run_program(program_id: int, source: str) -> None:
     runtime.stop_event.clear()
     runtime.skip_event.clear()
+    runtime.future_skips.clear()
     with db() as conn:
         program_row = conn.execute("SELECT * FROM programs WHERE id=?", (program_id,)).fetchone()
         if not program_row:
@@ -318,6 +320,18 @@ async def run_program(program_id: int, source: str) -> None:
             step = rowdict(step_row)
             runtime.state["current_step_index"] = index
             runtime.skip_event.clear()
+            if index in runtime.future_skips:
+                runtime.future_skips.discard(index)
+                runtime.state["steps"][index]["status"] = "skipped"
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO logs(started_at,program_id,program_name,zone_id,zone_name,source,planned_minutes,status,message)
+                           VALUES(?,?,?,?,?,?,?,?,?)""",
+                        (datetime.now().isoformat(timespec="seconds"), program_id, program["name"], step["zone_id"],
+                         step["zone_name"], source, step["duration_minutes"], "skipped", "Saltata manualmente prima dell'avvio"),
+                    )
+                    conn.commit()
+                continue
             if not step["zone_enabled"]:
                 runtime.state["steps"][index]["status"] = "disabled"
                 continue
@@ -613,6 +627,25 @@ async def skip_zone():
         raise HTTPException(409, "Nessuna zona attiva da saltare")
     runtime.skip_event.set()
     return {"ok": True}
+
+
+@app.post("/api/skip-zone/{step_index}")
+async def skip_program_step(step_index: int):
+    if not runtime.state["running"]:
+        raise HTTPException(409, "Nessun programma in esecuzione")
+    steps = runtime.state.get("steps", [])
+    if step_index < 0 or step_index >= len(steps):
+        raise HTTPException(404, "Zona del programma non trovata")
+    status = steps[step_index].get("status")
+    current_index = runtime.state.get("current_step_index")
+    if status == "running" or step_index == current_index:
+        runtime.skip_event.set()
+        return {"ok": True, "mode": "current"}
+    if status != "pending":
+        raise HTTPException(409, "La zona non è più in attesa")
+    runtime.future_skips.add(step_index)
+    steps[step_index]["status"] = "skipped"
+    return {"ok": True, "mode": "future"}
 
 
 @app.get("/api/notification-services")
