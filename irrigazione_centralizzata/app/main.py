@@ -481,6 +481,33 @@ async def create_program(payload: ProgramIn):
     return {"id": program_id}
 
 
+@app.put("/api/programs/{program_id}")
+async def update_program(program_id: int, payload: ProgramIn):
+    if payload.pump_enabled and not payload.pump_entity:
+        raise HTTPException(400, "Se la pompa è abilitata devi selezionare la sua entità")
+    with db() as conn:
+        exists = conn.execute("SELECT id FROM programs WHERE id=?", (program_id,)).fetchone()
+        if not exists:
+            raise HTTPException(404, "Programma non trovato")
+        conn.execute(
+            """UPDATE programs SET name=?,enabled=?,weekdays=?,start_times=?,weather_enabled=?,weather_entity=?,
+               rain_skip_enabled=?,pump_enabled=?,pump_entity=?,pump_lead_seconds=?,pump_lag_seconds=?,
+               inter_zone_seconds=? WHERE id=?""",
+            (payload.name, payload.enabled, json.dumps(payload.weekdays), json.dumps(payload.start_times),
+             payload.weather_enabled, payload.weather_entity, payload.rain_skip_enabled, payload.pump_enabled,
+             payload.pump_entity, payload.pump_lead_seconds, payload.pump_lag_seconds,
+             payload.inter_zone_seconds, program_id),
+        )
+        conn.execute("DELETE FROM program_steps WHERE program_id=?", (program_id,))
+        for position, step in enumerate(payload.steps):
+            conn.execute(
+                "INSERT INTO program_steps(program_id,zone_id,position,duration_minutes) VALUES(?,?,?,?)",
+                (program_id, step.zone_id, position, step.duration_minutes),
+            )
+        conn.commit()
+    return {"id": program_id, "updated": True}
+
+
 @app.delete("/api/programs/{program_id}")
 async def delete_program(program_id: int):
     with db() as conn:

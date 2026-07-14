@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+- Aggiunta modifica dei programmi esistenti.
+- Il modulo viene compilato con giorni, orari, pompa, meteo e sequenza zone già salvati.
+- Aggiunto pulsante per annullare la modifica senza alterare il programma.
+
 ## 0.2.0
 - Prima versione installabile come repository Home Assistant.
 - Interfaccia Ingress per utilizzo, programmazione e log.

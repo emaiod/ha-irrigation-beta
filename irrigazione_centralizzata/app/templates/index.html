@@ -40,7 +40,7 @@
         <button>Salva zona</button>
       </form><div id="zoneList"></div>
     </div>
-    <div class="box"><h2>Nuovo programma</h2>
+    <div class="box"><h2 id="programFormTitle">Nuovo programma</h2>
       <form id="programForm">
         <label>Nome<input name="name" required placeholder="Irrigazione serale"></label>
         <fieldset><legend>Giorni</legend><div class="days"><label><input type="checkbox" value="0">Lun</label><label><input type="checkbox" value="1">Mar</label><label><input type="checkbox" value="2">Mer</label><label><input type="checkbox" value="3">Gio</label><label><input type="checkbox" value="4">Ven</label><label><input type="checkbox" value="5">Sab</label><label><input type="checkbox" value="6">Dom</label></div></fieldset>
@@ -54,7 +54,7 @@
         <div class="optional" data-for="weather_enabled"><label>Entità meteo<select name="weather_entity" class="entity-select" data-domains="weather"></select></label><label class="toggle"><input type="checkbox" name="rain_skip_enabled"> Salta in caso di pioggia</label></div>
         <label>Attesa tra zone (sec)<input type="number" name="inter_zone_seconds" value="5" min="0"></label>
         <h3>Sequenza zone</h3><div id="stepBuilder"></div><button type="button" id="addStep" class="secondary">+ Aggiungi zona</button>
-        <button>Salva programma</button>
+        <div class="form-actions"><button id="saveProgramBtn">Salva programma</button><button type="button" id="cancelProgramEdit" class="secondary hidden">Annulla modifica</button></div>
       </form>
     </div>
   </div>
