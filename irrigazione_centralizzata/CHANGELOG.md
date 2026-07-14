@@ -1,3 +1,14 @@
+## 0.3.0
+
+- Portale operatori riscritto con template HTML, CSS e JavaScript separati.
+- Eliminato l'uso di stringhe HTML formattate dentro Python che causava `KeyError: font-family`.
+- Accesso separato con username e password gestiti dall'add-on.
+- Dashboard operatore con stato, programma, zona, tempo residuo e sequenza completa.
+- Comandi operatore per avvio programma, arresto totale e salto delle zone attive o future.
+- Redirect automatico dalla porta 8100 a `/operator`.
+- Cookie di sessione HTTP-only e registro delle azioni degli operatori.
+- Nessuna modifica al motore di irrigazione o all'interfaccia amministrativa esistente.
+
 ## 0.2.8
 
 - Corretto definitivamente l’avvio del portale operatori sulla porta 8100.
