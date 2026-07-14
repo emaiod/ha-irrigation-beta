@@ -5,8 +5,6 @@ import json
 import os
 import re
 import sqlite3
-import hashlib
-import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -43,12 +41,6 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition:
     columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
-
-def hash_operator_password(password: str, salt_hex: str | None = None) -> tuple[str, str]:
-    salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
-    return digest.hex(), salt.hex()
 
 
 def init_db() -> None:
@@ -108,23 +100,6 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS operator_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                display_name TEXT NOT NULL,
-                username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                password_hash TEXT NOT NULL,
-                salt TEXT NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                last_login TEXT
-            );
-            CREATE TABLE IF NOT EXISTS operator_audit (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TEXT NOT NULL,
-                username TEXT NOT NULL,
-                action TEXT NOT NULL,
-                detail TEXT
             );
             CREATE TABLE IF NOT EXISTS weather_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -798,73 +773,6 @@ async def skip_program_step(step_index: int):
     runtime.future_skips.add(step_index)
     steps[step_index]["status"] = "skipped"
     return {"ok": True, "mode": "future"}
-
-
-class OperatorUserIn(BaseModel):
-    display_name: str = Field(min_length=1, max_length=80)
-    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9._-]+$")
-    password: str = Field(min_length=8, max_length=128)
-    enabled: bool = True
-
-
-class OperatorUserUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=80)
-    password: str | None = Field(default=None, min_length=8, max_length=128)
-    enabled: bool | None = None
-
-
-@app.get("/api/operator-users")
-async def list_operator_users():
-    with db() as conn:
-        rows = conn.execute("SELECT id,display_name,username,enabled,created_at,last_login FROM operator_users ORDER BY username").fetchall()
-    return [rowdict(r) for r in rows]
-
-
-@app.post("/api/operator-users")
-async def create_operator_user(payload: OperatorUserIn):
-    password_hash, salt = hash_operator_password(payload.password)
-    try:
-        with db() as conn:
-            cur = conn.execute("INSERT INTO operator_users(display_name,username,password_hash,salt,enabled,created_at) VALUES(?,?,?,?,?,?)",
-                (payload.display_name.strip(), payload.username.strip(), password_hash, salt, int(payload.enabled), datetime.now().isoformat(timespec="seconds")))
-            conn.commit()
-        return {"id": cur.lastrowid}
-    except sqlite3.IntegrityError as exc:
-        raise HTTPException(409, "Nome utente già esistente") from exc
-
-
-@app.put("/api/operator-users/{user_id}")
-async def update_operator_user(user_id: int, payload: OperatorUserUpdate):
-    with db() as conn:
-        row = conn.execute("SELECT * FROM operator_users WHERE id=?", (user_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Utente non trovato")
-        display_name = payload.display_name.strip() if payload.display_name is not None else row["display_name"]
-        enabled = int(payload.enabled) if payload.enabled is not None else row["enabled"]
-        password_hash, salt = row["password_hash"], row["salt"]
-        if payload.password:
-            password_hash, salt = hash_operator_password(payload.password)
-        conn.execute("UPDATE operator_users SET display_name=?,enabled=?,password_hash=?,salt=? WHERE id=?",
-                     (display_name, enabled, password_hash, salt, user_id))
-        conn.commit()
-    return {"updated": True}
-
-
-@app.delete("/api/operator-users/{user_id}")
-async def delete_operator_user(user_id: int):
-    with db() as conn:
-        cur = conn.execute("DELETE FROM operator_users WHERE id=?", (user_id,))
-        conn.commit()
-    if not cur.rowcount:
-        raise HTTPException(404, "Utente non trovato")
-    return {"deleted": True}
-
-
-@app.get("/api/operator-audit")
-async def operator_audit(limit: int = 100):
-    with db() as conn:
-        rows = conn.execute("SELECT * FROM operator_audit ORDER BY id DESC LIMIT ?", (min(max(limit,1),500),)).fetchall()
-    return [rowdict(r) for r in rows]
 
 
 @app.get("/api/notification-services")
