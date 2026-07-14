@@ -1,3 +1,10 @@
+## 0.2.6
+
+- Corretto il caricamento degli asset frontend tramite cache busting Ingress.
+- Ripristinati e verificati i pulsanti **Salta zona** sulla zona attiva e sulle zone in attesa.
+- Verificata la visualizzazione dei badge AUTO, MANUALE, DISABILITATO ed ERRORE.
+- Mantenute le funzioni calendario, alba/tramonto e storico meteo della 0.2.5.
+
 ## 0.2.5
 
 - Badge AUTO, MANUALE, DISABILITATO ed ERRORE su ogni programma.

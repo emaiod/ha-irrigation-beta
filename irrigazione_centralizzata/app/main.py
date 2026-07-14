@@ -584,6 +584,16 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Irrigazione Centralizzata", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def disable_frontend_cache(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 
