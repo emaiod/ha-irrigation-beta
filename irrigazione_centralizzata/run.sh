@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mkdir -p /data
-bashio::log.info "Avvio Irrigazione Centralizzata 0.2.8"
+bashio::log.info "Avvio Irrigazione Centralizzata 0.3.0"
 
 cd /app
 
