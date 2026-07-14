@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Irrigazione Centralizzata</title>
-  <link rel="stylesheet" href="static/style.css?v=0.2.6">
+  <link rel="stylesheet" href="static/style.css?v=0.2.7">
 </head>
 <body>
 <header><div><h1>💧 Irrigazione Centralizzata</h1><p>Controllo e programmazione tramite entità Home Assistant</p></div><span id="systemBadge" class="badge">Caricamento…</span></header>
@@ -13,6 +13,7 @@
   <button class="tab" data-tab="programming">Programmazione</button>
   <button class="tab" data-tab="calendar">Calendario e meteo</button>
   <button class="tab" data-tab="logs">Log</button>
+  <button class="tab" data-tab="users">Utenti operatori</button>
 </nav>
 <main>
 <section id="use" class="panel active">
@@ -93,6 +94,28 @@
   </div>
 </section>
 <section id="logs" class="panel"><div class="box"><h2>Registro irrigazioni</h2><button id="refreshLogs" class="secondary">Aggiorna</button><div class="table-wrap"><table><thead><tr><th>Data</th><th>Programma</th><th>Zona</th><th>Durata</th><th>Avvio</th><th>Esito</th><th>Nota</th></tr></thead><tbody id="logRows"></tbody></table></div></div></section>
+
+<section id="users" class="panel">
+  <div class="grid2">
+    <div class="box">
+      <h2>Nuovo utente operatore</h2>
+      <p class="muted">Questi utenti accedono soltanto al portale irrigazione sulla porta 8100 e non a Home Assistant.</p>
+      <form id="operatorUserForm">
+        <label>Nome visualizzato<input name="display_name" required placeholder="Mario Rossi"></label>
+        <label>Nome utente<input name="username" required minlength="3" pattern="[A-Za-z0-9_.-]+" placeholder="mario"></label>
+        <label>Password<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+        <label class="toggle"><input type="checkbox" name="enabled" checked> Utente attivo</label>
+        <button>Crea utente</button>
+      </form>
+    </div>
+    <div class="box">
+      <h2>Utenti configurati</h2>
+      <div id="operatorUsersList"></div>
+    </div>
+  </div>
+  <div class="box audit-box"><h2>Attività operatori</h2><button id="refreshOperatorAudit" class="secondary">Aggiorna</button><div class="table-wrap"><table><thead><tr><th>Data</th><th>Utente</th><th>Azione</th><th>Dettaglio</th></tr></thead><tbody id="operatorAuditRows"></tbody></table></div></div>
+</section>
+
 </main>
-<script src="static/app.js?v=0.2.6"></script>
+<script src="static/app.js?v=0.2.7"></script>
 </body></html>

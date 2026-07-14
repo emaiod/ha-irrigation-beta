@@ -51,3 +51,12 @@ Consulta [`irrigazione_centralizzata/DOCS.md`](irrigazione_centralizzata/DOCS.md
 ## Licenza
 
 Distribuito con licenza MIT. Contributi, segnalazioni e pull request sono benvenuti.
+
+
+## Portale operatori (v0.2.7)
+
+L'amministratore crea gli account dalla scheda **Utenti operatori** dell'interfaccia Ingress. Il portale separato ascolta sulla porta `8100` e mostra soltanto stato impianto, programmi, avvio, arresto e salto zona. Gli operatori non ricevono un account Home Assistant.
+
+URL locale: `http://IP_HOME_ASSISTANT:8100/operator`
+
+Per l'accesso remoto utilizzare una VPN oppure un reverse proxy HTTPS. Non pubblicare la porta 8100 direttamente su Internet senza TLS e protezioni aggiuntive.

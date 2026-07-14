@@ -1,3 +1,11 @@
+## 0.2.7
+
+- Aggiunto portale operatori separato sulla porta 8100.
+- Login con nome utente e password, sessioni protette e logout.
+- Nuova pagina amministrativa Utenti operatori con creazione, attivazione, disattivazione, cambio password ed eliminazione.
+- Registro attività degli operatori: login, avvio programma, arresto e salto zona.
+- Il portale operatore espone solo stato, programmi e comandi irrigazione; non consente accesso a Home Assistant o alla configurazione.
+
 ## 0.2.6
 
 - Corretto il caricamento degli asset frontend tramite cache busting Ingress.

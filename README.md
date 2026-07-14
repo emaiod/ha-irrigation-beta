@@ -51,3 +51,7 @@ Consulta [`irrigazione_centralizzata/DOCS.md`](irrigazione_centralizzata/DOCS.md
 ## Licenza
 
 Distribuito con licenza MIT. Contributi, segnalazioni e pull request sono benvenuti.
+
+
+### Portale operatori
+Dalla versione 0.2.7 è disponibile un portale separato con credenziali interne all'add-on, pensato per giardinieri e operatori.
