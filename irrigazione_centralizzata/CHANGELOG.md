@@ -1,10 +1,16 @@
+## 0.2.8
+
+- Corretto definitivamente l’avvio del portale operatori sulla porta 8100.
+- Rinominato il modulo ASGI in `operator_portal` per evitare conflitti con il modulo Python `operator`.
+- Forzata una nuova compilazione dell’add-on per evitare il riutilizzo del build 0.2.7.
+- Rimossi i file `__pycache__` dal pacchetto.
+
 ## 0.2.7
 
-- Aggiunto portale operatori separato sulla porta 8100.
-- Login con nome utente e password, sessioni protette e logout.
-- Nuova pagina amministrativa Utenti operatori con creazione, attivazione, disattivazione, cambio password ed eliminazione.
-- Registro attività degli operatori: login, avvio programma, arresto e salto zona.
-- Il portale operatore espone solo stato, programmi e comandi irrigazione; non consente accesso a Home Assistant o alla configurazione.
+- Portale operatori separato sulla porta 8100.
+- Gestione utenti operatori dal pannello amministrativo.
+- Credenziali separate da Home Assistant e registro attività.
+
 
 ## 0.2.6
 

@@ -39,29 +39,16 @@ def db() -> sqlite3.Connection:
     return conn
 
 
-def hash_operator_password(password: str) -> str:
-    if len(password) < 8:
-        raise ValueError("La password deve contenere almeno 8 caratteri")
-    salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
-    return f"scrypt$16384$8$1${salt.hex()}${digest.hex()}"
-
-
-def verify_operator_password(password: str, stored: str) -> bool:
-    try:
-        algorithm, n, r, p, salt_hex, digest_hex = stored.split("$", 5)
-        if algorithm != "scrypt":
-            return False
-        digest = hashlib.scrypt(password.encode("utf-8"), salt=bytes.fromhex(salt_hex), n=int(n), r=int(r), p=int(p), dklen=32)
-        return secrets.compare_digest(digest.hex(), digest_hex)
-    except Exception:
-        return False
-
-
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
     columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def hash_operator_password(password: str, salt_hex: str | None = None) -> tuple[str, str]:
+    salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return digest.hex(), salt.hex()
 
 
 def init_db() -> None:
@@ -124,9 +111,10 @@ def init_db() -> None:
             );
             CREATE TABLE IF NOT EXISTS operator_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                display_name TEXT NOT NULL,
                 username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 password_hash TEXT NOT NULL,
-                display_name TEXT NOT NULL,
+                salt TEXT NOT NULL,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 last_login TEXT
@@ -134,11 +122,9 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS operator_audit (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TEXT NOT NULL,
-                user_id INTEGER,
-                username TEXT,
+                username TEXT NOT NULL,
                 action TEXT NOT NULL,
-                detail TEXT,
-                FOREIGN KEY(user_id) REFERENCES operator_users(id) ON DELETE SET NULL
+                detail TEXT
             );
             CREATE TABLE IF NOT EXISTS weather_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -814,6 +800,73 @@ async def skip_program_step(step_index: int):
     return {"ok": True, "mode": "future"}
 
 
+class OperatorUserIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9._-]+$")
+    password: str = Field(min_length=8, max_length=128)
+    enabled: bool = True
+
+
+class OperatorUserUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=80)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    enabled: bool | None = None
+
+
+@app.get("/api/operator-users")
+async def list_operator_users():
+    with db() as conn:
+        rows = conn.execute("SELECT id,display_name,username,enabled,created_at,last_login FROM operator_users ORDER BY username").fetchall()
+    return [rowdict(r) for r in rows]
+
+
+@app.post("/api/operator-users")
+async def create_operator_user(payload: OperatorUserIn):
+    password_hash, salt = hash_operator_password(payload.password)
+    try:
+        with db() as conn:
+            cur = conn.execute("INSERT INTO operator_users(display_name,username,password_hash,salt,enabled,created_at) VALUES(?,?,?,?,?,?)",
+                (payload.display_name.strip(), payload.username.strip(), password_hash, salt, int(payload.enabled), datetime.now().isoformat(timespec="seconds")))
+            conn.commit()
+        return {"id": cur.lastrowid}
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(409, "Nome utente già esistente") from exc
+
+
+@app.put("/api/operator-users/{user_id}")
+async def update_operator_user(user_id: int, payload: OperatorUserUpdate):
+    with db() as conn:
+        row = conn.execute("SELECT * FROM operator_users WHERE id=?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Utente non trovato")
+        display_name = payload.display_name.strip() if payload.display_name is not None else row["display_name"]
+        enabled = int(payload.enabled) if payload.enabled is not None else row["enabled"]
+        password_hash, salt = row["password_hash"], row["salt"]
+        if payload.password:
+            password_hash, salt = hash_operator_password(payload.password)
+        conn.execute("UPDATE operator_users SET display_name=?,enabled=?,password_hash=?,salt=? WHERE id=?",
+                     (display_name, enabled, password_hash, salt, user_id))
+        conn.commit()
+    return {"updated": True}
+
+
+@app.delete("/api/operator-users/{user_id}")
+async def delete_operator_user(user_id: int):
+    with db() as conn:
+        cur = conn.execute("DELETE FROM operator_users WHERE id=?", (user_id,))
+        conn.commit()
+    if not cur.rowcount:
+        raise HTTPException(404, "Utente non trovato")
+    return {"deleted": True}
+
+
+@app.get("/api/operator-audit")
+async def operator_audit(limit: int = 100):
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM operator_audit ORDER BY id DESC LIMIT ?", (min(max(limit,1),500),)).fetchall()
+    return [rowdict(r) for r in rows]
+
+
 @app.get("/api/notification-services")
 async def notification_services():
     services = await ha_request("GET", "/services")
@@ -846,85 +899,6 @@ async def save_notification_settings(payload: NotificationSettingsIn):
         conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('notification_service',?)", (payload.service,))
         conn.commit()
     return {"updated": True}
-
-
-class OperatorUserIn(BaseModel):
-    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
-    display_name: str = Field(min_length=1, max_length=80)
-    password: str = Field(min_length=8, max_length=200)
-    enabled: bool = True
-
-
-class OperatorUserUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=80)
-    password: str | None = Field(default=None, min_length=8, max_length=200)
-    enabled: bool | None = None
-
-
-@app.get("/api/operator-users")
-async def list_operator_users():
-    with db() as conn:
-        return [rowdict(r) for r in conn.execute(
-            "SELECT id,username,display_name,enabled,created_at,last_login FROM operator_users ORDER BY username"
-        )]
-
-
-@app.post("/api/operator-users")
-async def create_operator_user(payload: OperatorUserIn):
-    try:
-        password_hash = hash_operator_password(payload.password)
-        with db() as conn:
-            cur = conn.execute(
-                "INSERT INTO operator_users(username,password_hash,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
-                (payload.username.strip(), password_hash, payload.display_name.strip(), int(payload.enabled), datetime.now().isoformat(timespec="seconds")),
-            )
-            conn.commit()
-            return {"id": cur.lastrowid}
-    except sqlite3.IntegrityError as exc:
-        raise HTTPException(409, "Nome utente già esistente") from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@app.put("/api/operator-users/{user_id}")
-async def update_operator_user(user_id: int, payload: OperatorUserUpdate):
-    fields=[]; values=[]
-    if payload.display_name is not None:
-        fields.append("display_name=?"); values.append(payload.display_name.strip())
-    if payload.enabled is not None:
-        fields.append("enabled=?"); values.append(int(payload.enabled))
-    if payload.password is not None:
-        try:
-            fields.append("password_hash=?"); values.append(hash_operator_password(payload.password))
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-    if not fields:
-        return {"updated": False}
-    values.append(user_id)
-    with db() as conn:
-        cur=conn.execute(f"UPDATE operator_users SET {', '.join(fields)} WHERE id=?", values)
-        conn.commit()
-    if not cur.rowcount:
-        raise HTTPException(404, "Utente non trovato")
-    return {"updated": True}
-
-
-@app.delete("/api/operator-users/{user_id}")
-async def delete_operator_user(user_id: int):
-    with db() as conn:
-        cur=conn.execute("DELETE FROM operator_users WHERE id=?", (user_id,))
-        conn.commit()
-    if not cur.rowcount:
-        raise HTTPException(404, "Utente non trovato")
-    return {"deleted": True}
-
-
-@app.get("/api/operator-audit")
-async def operator_audit(limit: int = 200):
-    with db() as conn:
-        return [rowdict(r) for r in conn.execute(
-            "SELECT * FROM operator_audit ORDER BY id DESC LIMIT ?", (min(max(limit,1),1000),)
-        )]
 
 
 @app.get("/api/calendar")
