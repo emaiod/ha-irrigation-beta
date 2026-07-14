@@ -1,3 +1,18 @@
+## 0.3.2
+
+- Registro irrigazioni ridisegnato con card responsive leggibili anche da smartphone.
+- Gli esiti `error` mostrano il motivo completo in un riquadro dedicato **Motivo dell’errore**.
+- Visualizzati chiaramente data, programma, zona, durata, origine dell’avvio ed esito.
+- Se un vecchio errore non contiene un messaggio, viene mostrato un avviso esplicito anziché una nota vuota.
+- Aggiunto cache busting degli asset frontend alla versione 0.3.2.
+
+## 0.3.1
+
+- Portale operatori esteso con modifica della programmazione.
+- Aggiunto avvio manuale delle singole zone con durata selezionabile.
+- Aggiunte sezioni Stato, Programmi e Zone nel portale esterno.
+- Registrazione delle modifiche e degli avvii manuali nel registro attività operatori.
+
 ## 0.3.0
 
 - Portale operatori riscritto con template HTML, CSS e JavaScript separati.
@@ -21,7 +36,6 @@
 - Portale operatori separato sulla porta 8100.
 - Gestione utenti operatori dal pannello amministrativo.
 - Credenziali separate da Home Assistant e registro attività.
-
 
 ## 0.2.6
 
