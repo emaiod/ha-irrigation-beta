@@ -2,7 +2,7 @@ let entities=[], zones=[], programs=[], editingProgramId=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 async function api(path,opts={}){const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});if(!r.ok)throw new Error(await r.text());return r.json()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function openTab(name){$$('.tab,.panel').forEach(x=>x.classList.remove('active'));const tab=document.querySelector(`[data-tab="${name}"]`);if(tab)tab.classList.add('active');const panel=$('#'+name);if(panel)panel.classList.add('active');if(name==='logs')loadLogs();if(name==='users'){loadOperatorUsers();loadOperatorAudit()};if(name==='calendar'){loadCalendar();loadWeatherHistory()}}
+function openTab(name){$$('.tab,.panel').forEach(x=>x.classList.remove('active'));const tab=document.querySelector(`[data-tab="${name}"]`);if(tab)tab.classList.add('active');const panel=$('#'+name);if(panel)panel.classList.add('active');if(name==='logs')loadLogs();if(name==='calendar'){loadCalendar();loadWeatherHistory()}}
 $$('.tab').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
 $$('input[type=checkbox]').forEach(c=>c.addEventListener('change',()=>{const box=document.querySelector(`[data-for="${c.name}"]`);if(box)box.classList.toggle('visible',c.checked)}));
 async function loadEntities(){try{entities=await api('api/entities');$$('.entity-select').forEach(fillEntity)}catch(e){console.error(e)}}
@@ -42,11 +42,3 @@ $('#refreshCalendar').onclick=loadCalendar;$('#refreshWeather').onclick=loadWeat
 $('#refreshLogs').onclick=loadLogs;
 $('#openProgramming').onclick=()=>openTab('programming');
 (async()=>{await loadEntities();await loadZones();await loadPrograms();await loadNotificationSettings();await loadState();setInterval(loadState,2000)})();
-
-async function loadOperatorUsers(){const users=await api('api/operator-users');$('#operatorUserList').innerHTML=users.length?users.map(u=>`<div class="list-item"><span><strong>${esc(u.display_name)}</strong><br><small>${esc(u.username)} · ${u.enabled?'Attivo':'Disattivato'}${u.last_login?' · Ultimo accesso '+esc(u.last_login.replace('T',' ')):''}</small></span><div class="card-actions"><button class="secondary" onclick="toggleOperatorUser(${u.id},${u.enabled?0:1})">${u.enabled?'Disattiva':'Attiva'}</button><button class="secondary" onclick="resetOperatorPassword(${u.id})">Password</button><button class="danger" onclick="deleteOperatorUser(${u.id})">Elimina</button></div></div>`).join(''):'<p>Nessun operatore configurato.</p>'}
-$('#operatorUserForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await api('api/operator-users',{method:'POST',body:JSON.stringify({display_name:f.get('display_name'),username:f.get('username'),password:f.get('password'),enabled:f.has('enabled')})});e.target.reset();e.target.elements.enabled.checked=true;await loadOperatorUsers()}catch(err){alert(err.message)}};
-window.toggleOperatorUser=async(id,enabled)=>{await api(`api/operator-users/${id}`,{method:'PUT',body:JSON.stringify({enabled:!!enabled})});loadOperatorUsers()};
-window.resetOperatorPassword=async id=>{const password=prompt('Nuova password (minimo 8 caratteri)');if(!password)return;try{await api(`api/operator-users/${id}`,{method:'PUT',body:JSON.stringify({password})});alert('Password aggiornata')}catch(e){alert(e.message)}};
-window.deleteOperatorUser=async id=>{if(confirm('Eliminare definitivamente questo utente?')){await api(`api/operator-users/${id}`,{method:'DELETE'});loadOperatorUsers()}};
-async function loadOperatorAudit(){const rows=await api('api/operator-audit');$('#operatorAuditRows').innerHTML=rows.map(r=>`<tr><td>${esc((r.created_at||'').replace('T',' '))}</td><td>${esc(r.username)}</td><td>${esc(r.action)}</td><td>${esc(r.detail||'')}</td></tr>`).join('')}
-$('#refreshOperatorAudit').onclick=loadOperatorAudit;

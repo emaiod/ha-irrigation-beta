@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Irrigazione Centralizzata</title>
-  <link rel="stylesheet" href="static/style.css?v=0.3.2">
+  <link rel="stylesheet" href="static/style.css?v=0.2.6">
 </head>
 <body>
 <header><div><h1>💧 Irrigazione Centralizzata</h1><p>Controllo e programmazione tramite entità Home Assistant</p></div><span id="systemBadge" class="badge">Caricamento…</span></header>
@@ -13,7 +13,6 @@
   <button class="tab" data-tab="programming">Programmazione</button>
   <button class="tab" data-tab="calendar">Calendario e meteo</button>
   <button class="tab" data-tab="logs">Log</button>
-  <button class="tab" data-tab="users">Utenti operatori</button>
 </nav>
 <main>
 <section id="use" class="panel active">
@@ -93,18 +92,7 @@
     <div class="box"><h2>Storico meteo</h2><p class="muted">Dati salvati periodicamente e all'inizio/fine dei programmi che usano il meteo.</p><button id="refreshWeather" class="secondary">Aggiorna</button><div class="table-wrap"><table><thead><tr><th>Data</th><th>Programma</th><th>Fase</th><th>Condizione</th><th>Temp.</th><th>Umidità</th><th>Vento</th></tr></thead><tbody id="weatherRows"></tbody></table></div></div>
   </div>
 </section>
-<section id="logs" class="panel"><div class="box"><div class="log-title-row"><div><h2>Registro irrigazioni</h2><p class="muted">Gli errori mostrano sempre il motivo completo sotto la relativa esecuzione.</p></div><button id="refreshLogs" class="secondary">Aggiorna</button></div><div id="logCards" class="irrigation-log-list"></div><div class="hidden"><table><tbody id="logRows"></tbody></table></div></div></section>
-
-<section id="users" class="panel">
-  <div class="grid2">
-    <div class="box"><h2>Nuovo operatore</h2><p>Credenziali separate da Home Assistant. Accesso: <code>http://IP_HOME_ASSISTANT:8100/operator</code></p>
-      <form id="operatorUserForm"><label>Nome visualizzato<input name="display_name" required></label><label>Nome utente<input name="username" minlength="3" required></label><label>Password<input type="password" name="password" minlength="8" required></label><label class="toggle"><input type="checkbox" name="enabled" checked> Attivo</label><button>Crea utente</button></form>
-    </div>
-    <div class="box"><h2>Utenti operatori</h2><div id="operatorUserList"></div></div>
-  </div>
-  <div class="box" style="margin-top:18px"><h2>Attività operatori</h2><button id="refreshOperatorAudit" class="secondary">Aggiorna</button><div class="table-wrap"><table><thead><tr><th>Data</th><th>Utente</th><th>Azione</th><th>Dettaglio</th></tr></thead><tbody id="operatorAuditRows"></tbody></table></div></div>
-</section>
+<section id="logs" class="panel"><div class="box"><h2>Registro irrigazioni</h2><button id="refreshLogs" class="secondary">Aggiorna</button><div class="table-wrap"><table><thead><tr><th>Data</th><th>Programma</th><th>Zona</th><th>Durata</th><th>Avvio</th><th>Esito</th><th>Nota</th></tr></thead><tbody id="logRows"></tbody></table></div></div></section>
 </main>
-<script src="static/app.js?v=0.3.2"></script>
-<script src="static/logs_v032.js?v=0.3.2"></script>
+<script src="static/app.js?v=0.2.6"></script>
 </body></html>
