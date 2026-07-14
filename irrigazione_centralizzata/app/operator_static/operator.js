@@ -1,37 +1,15 @@
-const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-
-async function api(path,options={}){
-  const response=await fetch(`/operator/api/${path}`,{headers:{'Content-Type':'application/json'},...options});
-  if(response.status===401){location.href='/operator';throw new Error('Sessione scaduta');}
-  if(!response.ok)throw new Error(await response.text());
-  return response.json();
-}
-
-function statusLabel(status){return({pending:'In attesa',running:'In corso',completed:'Completata',skipped:'Saltata',disabled:'Disabilitata',stopped:'Interrotta',error:'Errore'})[status]||status;}
-
-async function loadPrograms(){
-  const programs=await api('programs');
-  document.querySelector('#programs').innerHTML=programs.length?programs.map(program=>`<article class="card program-card"><h3>${esc(program.name)}</h3><p>${(program.steps||[]).map(step=>`${esc(step.zone_name)} · ${Number(step.duration_minutes)} min`).join('<br>')||'Nessuna zona configurata'}</p><button onclick="startProgram(${program.id},'${esc(program.name).replace(/'/g,'&#39;')}')">Avvia</button></article>`).join(''):'<p class="muted">Nessun programma configurato.</p>';
-}
-
-async function loadState(){
-  const state=await api('state');
-  document.querySelector('#systemStatus').textContent=state.running?'Irrigazione attiva':'Sistema pronto';
-  document.querySelector('#programName').textContent=state.program_name||'Nessuno';
-  document.querySelector('#zoneName').textContent=state.zone_name||'—';
-  const total=Math.max(0,Number(state.remaining_seconds||0));
-  document.querySelector('#remaining').textContent=`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
-  const card=document.querySelector('#runtimeCard');
-  card.classList.toggle('hidden',!state.running);
-  if(!state.running)return;
-  document.querySelector('#runtimeTitle').textContent=state.program_name||'Programma in corso';
-  document.querySelector('#runtimeSteps').innerHTML=(state.steps||[]).map((step,index)=>{const canSkip=['running','pending'].includes(step.status);return `<div class="step ${esc(step.status)}"><span class="step-number">${index+1}</span><div><strong>${esc(step.zone_name)}</strong><small>${Number(step.duration_minutes)} min · ${statusLabel(step.status)}</small></div>${canSkip?`<button class="warning" onclick="skipZone(${index},'${esc(step.zone_name).replace(/'/g,'&#39;')}')">Salta zona</button>`:''}</div>`;}).join('');
-}
-
-window.startProgram=async(id,name)=>{if(!confirm(`Avviare ${name}?`))return;try{await api(`programs/${id}/start`,{method:'POST'});await loadState();}catch(error){showError(error.message);}};
-window.skipZone=async(index,name)=>{if(!confirm(`Saltare la zona ${name}?`))return;try{await api(`skip-zone/${index}`,{method:'POST'});await loadState();}catch(error){showError(error.message);}};
-document.querySelector('#stopButton')?.addEventListener('click',async()=>{if(!confirm('Arrestare completamente il programma?'))return;try{await api('stop',{method:'POST'});await loadState();}catch(error){showError(error.message);}});
-
-function showError(message){const box=document.querySelector('#pageError');box.textContent=message;box.classList.remove('hidden');}
-
-(async()=>{try{await Promise.all([loadPrograms(),loadState()]);setInterval(()=>loadState().catch(error=>showError(error.message)),2000);}catch(error){showError(error.message);}})();
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let programs=[],zones=[];
+async function api(path,options={}){const r=await fetch(`/operator/api/${path}`,{headers:{'Content-Type':'application/json'},...options});if(r.status===401){location.href='/operator';throw Error('Sessione scaduta')}if(!r.ok)throw Error(await r.text());return r.json()}
+function showError(m){const b=document.querySelector('#pageError');b.textContent=m;b.classList.remove('hidden')}
+function statusLabel(s){return({pending:'In attesa',running:'In corso',completed:'Completata',skipped:'Saltata',disabled:'Disabilitata',stopped:'Interrotta',error:'Errore'})[s]||s}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelector('#'+b.dataset.target).classList.add('active')});
+async function loadPrograms(){programs=await api('programs');document.querySelector('#programs').innerHTML=programs.length?programs.map(p=>`<article class="card program-card"><div class="card-head"><h3>${esc(p.name)}</h3><span class="badge">${p.enabled?'ATTIVO':'DISABILITATO'}</span></div><p>${(p.steps||[]).map(s=>`${esc(s.zone_name)} · ${Number(s.duration_minutes)} min`).join('<br>')||'Nessuna zona'}</p><p class="muted">Giorni: ${(p.weekdays||[]).join(', ')||'nessuno'}<br>Orari: ${(p.start_times||[]).join(', ')||'nessuno'}${p.sun_event&&p.sun_event!=='none'?`<br>Evento: ${esc(p.sun_event)} ${Number(p.sun_offset_minutes||0)} min`:''}</p><div class="actions"><button onclick="startProgram(${p.id},'${esc(p.name).replace(/'/g,'&#39;')}')">Avvia</button><button class="secondary" onclick="editProgram(${p.id})">Modifica</button></div></article>`).join(''):'<p class="muted">Nessun programma.</p>'}
+async function loadZones(){zones=await api('zones');document.querySelector('#zones').innerHTML=zones.length?zones.map(z=>`<article class="card program-card"><h3>${esc(z.name)}</h3><p class="muted">Durata massima: ${Number(z.max_minutes)} min<br>${esc(z.valve_entity)}</p><label>Durata<input id="zoneDuration${z.id}" type="number" min="1" max="${Number(z.max_minutes)}" value="10"></label><button onclick="startZone(${z.id},'${esc(z.name).replace(/'/g,'&#39;')}',${Number(z.max_minutes)})">Avvia zona</button></article>`).join(''):'<p class="muted">Nessuna zona.</p>'}
+async function loadState(){const s=await api('state');document.querySelector('#systemStatus').textContent=s.running?'Irrigazione attiva':'Sistema pronto';document.querySelector('#programName').textContent=s.program_name||'Nessuno';document.querySelector('#zoneName').textContent=s.zone_name||'—';const t=Math.max(0,Number(s.remaining_seconds||0));document.querySelector('#remaining').textContent=`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;const c=document.querySelector('#runtimeCard');c.classList.toggle('hidden',!s.running);if(s.running){document.querySelector('#runtimeTitle').textContent=s.program_name||'Programma in corso';document.querySelector('#runtimeSteps').innerHTML=(s.steps||[]).map((x,i)=>`<div class="step ${esc(x.status)}"><span class="step-number">${i+1}</span><div><strong>${esc(x.zone_name)}</strong><small>${Number(x.duration_minutes)} min · ${statusLabel(x.status)}</small></div>${['running','pending'].includes(x.status)?`<button class="warning" onclick="skipZone(${i},'${esc(x.zone_name).replace(/'/g,'&#39;')}')">Salta zona</button>`:''}</div>`).join('')}}
+window.startProgram=async(id,n)=>{if(confirm(`Avviare ${n}?`)){try{await api(`programs/${id}/start`,{method:'POST'});await loadState()}catch(e){showError(e.message)}}};
+window.startZone=async(id,n,max)=>{const d=Number(document.querySelector('#zoneDuration'+id).value);if(!Number.isInteger(d)||d<1||d>max)return alert(`Durata valida: 1-${max} minuti`);if(confirm(`Avviare ${n} per ${d} minuti?`)){try{await api(`zones/${id}/start`,{method:'POST',body:JSON.stringify({duration_minutes:d})});await loadState()}catch(e){showError(e.message)}}};
+window.skipZone=async(i,n)=>{if(confirm(`Saltare ${n}?`)){try{await api(`skip-zone/${i}`,{method:'POST'});await loadState()}catch(e){showError(e.message)}}};
+window.editProgram=id=>{const p=programs.find(x=>x.id===id);if(!p)return;const name=prompt('Nome programma',p.name);if(name===null)return;const times=prompt('Orari separati da virgola (HH:MM)',(p.start_times||[]).join(', '));if(times===null)return;const days=prompt('Giorni numerici separati da virgola (0=Lun ... 6=Dom)',(p.weekdays||[]).join(','));if(days===null)return;const payload={...p,name:name.trim(),start_times:times.split(',').map(x=>x.trim()).filter(Boolean),weekdays:days.split(',').map(x=>Number(x.trim())).filter(x=>Number.isInteger(x)&&x>=0&&x<=6),steps:(p.steps||[]).map(s=>({zone_id:Number(s.zone_id),duration_minutes:Number(prompt(`Durata ${s.zone_name} (minuti)`,s.duration_minutes)||s.duration_minutes)}))};delete payload.id;api(`programs/${id}`,{method:'PUT',body:JSON.stringify(payload)}).then(()=>{alert('Programma aggiornato');loadPrograms()}).catch(e=>showError(e.message))};
+document.querySelector('#stopButton')?.addEventListener('click',async()=>{if(confirm('Arrestare completamente il programma?')){try{await api('stop',{method:'POST'});await loadState()}catch(e){showError(e.message)}}});
+(async()=>{try{await Promise.all([loadPrograms(),loadZones(),loadState()]);setInterval(()=>loadState().catch(e=>showError(e.message)),2000)}catch(e){showError(e.message)}})();
