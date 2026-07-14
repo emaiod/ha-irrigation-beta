@@ -1,10 +1,15 @@
-# Repository Home Assistant – Irrigazione Centralizzata
+# Irrigazione Centralizzata
 
-Questo repository contiene l'app/add-on `irrigazione_centralizzata`.
+App/add-on Home Assistant per controllare un impianto di irrigazione usando le entità già presenti nell'installazione.
 
-Prima della pubblicazione sostituisci `USERNAME` nei file:
+## Funzioni
 
-- `repository.yaml`
-- `irrigazione_centralizzata/config.yaml`
+- zone ed elettrovalvole;
+- programmi automatici e avvio manuale;
+- pompa di sollevamento opzionale;
+- meteo e umidità escludibili;
+- tempi massimi di sicurezza;
+- registro irrigazioni persistente;
+- interfaccia integrata tramite Ingress.
 
-Poi aggiungi l'URL del repository in **Home Assistant → Impostazioni → App → App Store → Repository**.
+Consulta `DOCS.md` per installazione e utilizzo.
