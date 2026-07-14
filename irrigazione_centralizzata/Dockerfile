@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base-python:3.13-alpine3.22
 
-ARG BUILD_VERSION="0.2.8"
+ARG BUILD_VERSION="0.2.9"
 ARG BUILD_ARCH
 
 LABEL \
