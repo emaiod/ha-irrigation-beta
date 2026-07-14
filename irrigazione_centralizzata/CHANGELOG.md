@@ -1,3 +1,13 @@
+## 0.2.5
+
+- Badge AUTO, MANUALE, DISABILITATO ed ERRORE su ogni programma.
+- Riepilogo di giorni, orari e prossima partenza nelle card.
+- Validazione delle pianificazioni incomplete.
+- Partenza automatica relativa ad alba o tramonto, con anticipo/ritardo configurabile.
+- Nuova pagina Calendario con le prossime partenze automatiche.
+- Storico meteo persistente, acquisito periodicamente e all'inizio/fine dei programmi.
+- Documentazione GitHub ampliata per installazione, configurazione e pubblicazione.
+
 ## 0.2.4
 
 - Aggiunto il pulsante **Salta zona** direttamente sulla zona in corso.

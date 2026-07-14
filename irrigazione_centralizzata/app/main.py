@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -34,6 +35,12 @@ def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db() -> None:
@@ -94,8 +101,25 @@ def init_db() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS weather_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL,
+                program_id INTEGER,
+                program_name TEXT,
+                weather_entity TEXT NOT NULL,
+                phase TEXT NOT NULL DEFAULT 'periodic',
+                condition TEXT,
+                temperature REAL,
+                humidity REAL,
+                pressure REAL,
+                wind_speed REAL,
+                precipitation REAL,
+                raw_attributes TEXT
+            );
             """
         )
+        ensure_column(conn, "programs", "sun_event", "TEXT NOT NULL DEFAULT 'none'")
+        ensure_column(conn, "programs", "sun_offset_minutes", "INTEGER NOT NULL DEFAULT 0")
         conn.execute("INSERT OR IGNORE INTO settings(key,value) VALUES('master_enabled','true')")
         conn.execute("INSERT OR IGNORE INTO settings(key,value) VALUES('notifications_enabled','true')")
         conn.execute("INSERT OR IGNORE INTO settings(key,value) VALUES('notification_service','persistent_notification.create')")
@@ -191,6 +215,70 @@ async def zone_skip_reason(step: dict[str, Any]) -> str | None:
     return None
 
 
+def parse_ha_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone().replace(tzinfo=None)
+    except (TypeError, ValueError):
+        return None
+
+
+async def get_sun_event_time(event: str, offset_minutes: int = 0) -> datetime | None:
+    if event not in {"sunrise", "sunset"}:
+        return None
+    sun = await get_entity_state("sun.sun")
+    attr = "next_rising" if event == "sunrise" else "next_setting"
+    moment = parse_ha_datetime(sun.get("attributes", {}).get(attr))
+    return moment + timedelta(minutes=offset_minutes) if moment else None
+
+
+def weather_value(attributes: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = attributes.get(key)
+        try:
+            if value is not None:
+                return float(value)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+async def capture_weather_snapshot(program: dict[str, Any], phase: str) -> None:
+    entity_id = program.get("weather_entity") if program.get("weather_enabled") else None
+    if not entity_id:
+        return
+    try:
+        item = await get_entity_state(entity_id)
+        attrs = item.get("attributes", {})
+        with db() as conn:
+            conn.execute(
+                """INSERT INTO weather_history(captured_at,program_id,program_name,weather_entity,phase,condition,
+                   temperature,humidity,pressure,wind_speed,precipitation,raw_attributes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (datetime.now().isoformat(timespec="seconds"), program.get("id"), program.get("name"), entity_id, phase,
+                 item.get("state"), weather_value(attrs, "temperature"), weather_value(attrs, "humidity"),
+                 weather_value(attrs, "pressure"), weather_value(attrs, "wind_speed", "wind_speed_km_h"),
+                 weather_value(attrs, "precipitation", "precipitation_probability"), json.dumps(attrs, ensure_ascii=False)),
+            )
+            conn.commit()
+    except Exception:
+        return
+
+
+def validate_schedule(payload: "ProgramIn") -> None:
+    if payload.sun_event not in {"none", "sunrise", "sunset"}:
+        raise HTTPException(400, "Tipo di partenza solare non valido")
+    for weekday in payload.weekdays:
+        if weekday < 0 or weekday > 6:
+            raise HTTPException(400, "Giorno della settimana non valido")
+    for value in payload.start_times:
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+            raise HTTPException(400, f"Orario non valido: {value}")
+    has_time = bool(payload.start_times) or payload.sun_event != "none"
+    if has_time and not payload.weekdays:
+        raise HTTPException(400, "Se imposti una partenza automatica devi selezionare almeno un giorno")
+
+
 class Runtime:
     def __init__(self) -> None:
         self.task: asyncio.Task | None = None
@@ -247,6 +335,8 @@ class ProgramIn(BaseModel):
     enabled: bool = True
     weekdays: list[int] = []
     start_times: list[str] = []
+    sun_event: str = "none"
+    sun_offset_minutes: int = Field(default=0, ge=-240, le=240)
     weather_enabled: bool = False
     weather_entity: str | None = None
     rain_skip_enabled: bool = False
@@ -279,6 +369,7 @@ async def run_program(program_id: int, source: str) -> None:
             (program_id,),
         ).fetchall()
 
+    await capture_weather_snapshot(program, "program_start")
     skip_reason = await program_skip_reason(program)
     if skip_reason:
         with db() as conn:
@@ -427,6 +518,7 @@ async def run_program(program_id: int, source: str) -> None:
                     await send_notification("Irrigazione completata", f"Il programma {program['name']} è terminato correttamente.")
             except Exception:
                 pass
+        await capture_weather_snapshot(program, "program_end")
         runtime.state.update({
             "running": False, "paused": False, "program_id": None, "program_name": None,
             "zone_id": None, "zone_name": None, "remaining_seconds": 0, "source": None,
@@ -444,27 +536,50 @@ async def scheduler_loop() -> None:
         if not runtime.state["running"]:
             with db() as conn:
                 master = conn.execute("SELECT value FROM settings WHERE key='master_enabled'").fetchone()
-                if master and master["value"] == "true":
-                    programs = conn.execute("SELECT * FROM programs WHERE enabled=1").fetchall()
-                    for row in programs:
-                        p = rowdict(row)
-                        weekdays = json.loads(p["weekdays"])
-                        times = json.loads(p["start_times"])
-                        fire_key = f"{minute_key}:{p['id']}"
-                        if weekday in weekdays and hhmm in times and fire_key not in fired:
-                            fired.add(fire_key)
-                            runtime.task = asyncio.create_task(run_program(p["id"], "automatico"))
-                            break
+                programs = conn.execute("SELECT * FROM programs WHERE enabled=1").fetchall() if master and master["value"] == "true" else []
+            for row in programs:
+                p = rowdict(row)
+                weekdays = json.loads(p["weekdays"])
+                if weekday not in weekdays:
+                    continue
+                fire_key = f"{minute_key}:{p['id']}"
+                should_fire = hhmm in json.loads(p["start_times"])
+                if not should_fire and p.get("sun_event", "none") != "none":
+                    try:
+                        event_time = await get_sun_event_time(p["sun_event"], int(p.get("sun_offset_minutes", 0)))
+                        should_fire = bool(event_time and 0 <= (event_time - now).total_seconds() <= 35)
+                    except Exception:
+                        should_fire = False
+                if should_fire and fire_key not in fired:
+                    fired.add(fire_key)
+                    runtime.task = asyncio.create_task(run_program(p["id"], "automatico"))
+                    break
         fired = {key for key in fired if key.startswith(now.strftime("%Y-%m-%d"))}
         await asyncio.sleep(15)
+
+
+async def weather_history_loop() -> None:
+    while True:
+        with db() as conn:
+            rows = conn.execute("SELECT * FROM programs WHERE weather_enabled=1 AND weather_entity IS NOT NULL").fetchall()
+        seen: set[str] = set()
+        for row in rows:
+            program = rowdict(row)
+            entity = program.get("weather_entity")
+            if entity and entity not in seen:
+                seen.add(entity)
+                await capture_weather_snapshot(program, "periodic")
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
     scheduler = asyncio.create_task(scheduler_loop())
+    weather_task = asyncio.create_task(weather_history_loop())
     yield
     scheduler.cancel()
+    weather_task.cancel()
     await runtime.stop("Chiusura add-on")
 
 
@@ -552,12 +667,13 @@ async def programs():
 async def create_program(payload: ProgramIn):
     if payload.pump_enabled and not payload.pump_entity:
         raise HTTPException(400, "Se la pompa è abilitata devi selezionare la sua entità")
+    validate_schedule(payload)
     with db() as conn:
         cur = conn.execute(
-            """INSERT INTO programs(name,enabled,weekdays,start_times,weather_enabled,weather_entity,rain_skip_enabled,
+            """INSERT INTO programs(name,enabled,weekdays,start_times,sun_event,sun_offset_minutes,weather_enabled,weather_entity,rain_skip_enabled,
                pump_enabled,pump_entity,pump_lead_seconds,pump_lag_seconds,inter_zone_seconds)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (payload.name, payload.enabled, json.dumps(payload.weekdays), json.dumps(payload.start_times),
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (payload.name, payload.enabled, json.dumps(payload.weekdays), json.dumps(payload.start_times), payload.sun_event, payload.sun_offset_minutes,
              payload.weather_enabled, payload.weather_entity, payload.rain_skip_enabled, payload.pump_enabled,
              payload.pump_entity, payload.pump_lead_seconds, payload.pump_lag_seconds, payload.inter_zone_seconds),
         )
@@ -575,15 +691,16 @@ async def create_program(payload: ProgramIn):
 async def update_program(program_id: int, payload: ProgramIn):
     if payload.pump_enabled and not payload.pump_entity:
         raise HTTPException(400, "Se la pompa è abilitata devi selezionare la sua entità")
+    validate_schedule(payload)
     with db() as conn:
         exists = conn.execute("SELECT id FROM programs WHERE id=?", (program_id,)).fetchone()
         if not exists:
             raise HTTPException(404, "Programma non trovato")
         conn.execute(
-            """UPDATE programs SET name=?,enabled=?,weekdays=?,start_times=?,weather_enabled=?,weather_entity=?,
+            """UPDATE programs SET name=?,enabled=?,weekdays=?,start_times=?,sun_event=?,sun_offset_minutes=?,weather_enabled=?,weather_entity=?,
                rain_skip_enabled=?,pump_enabled=?,pump_entity=?,pump_lead_seconds=?,pump_lag_seconds=?,
                inter_zone_seconds=? WHERE id=?""",
-            (payload.name, payload.enabled, json.dumps(payload.weekdays), json.dumps(payload.start_times),
+            (payload.name, payload.enabled, json.dumps(payload.weekdays), json.dumps(payload.start_times), payload.sun_event, payload.sun_offset_minutes,
              payload.weather_enabled, payload.weather_entity, payload.rain_skip_enabled, payload.pump_enabled,
              payload.pump_entity, payload.pump_lead_seconds, payload.pump_lag_seconds,
              payload.inter_zone_seconds, program_id),
@@ -680,6 +797,44 @@ async def save_notification_settings(payload: NotificationSettingsIn):
         conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('notification_service',?)", (payload.service,))
         conn.commit()
     return {"updated": True}
+
+
+@app.get("/api/calendar")
+async def calendar(days: int = 30):
+    days = min(max(days, 1), 90)
+    now = datetime.now()
+    events: list[dict[str, Any]] = []
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM programs WHERE enabled=1 ORDER BY name").fetchall()
+    for row in rows:
+        p = rowdict(row)
+        weekdays = json.loads(p["weekdays"])
+        for offset in range(days + 1):
+            day = (now + timedelta(days=offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+            if day.weekday() not in weekdays:
+                continue
+            for time_value in json.loads(p["start_times"]):
+                hour, minute = map(int, time_value.split(":"))
+                moment = day.replace(hour=hour, minute=minute)
+                if moment > now:
+                    events.append({"program_id": p["id"], "program_name": p["name"], "datetime": moment.isoformat(), "type": "fixed", "label": time_value})
+        if p.get("sun_event", "none") != "none":
+            try:
+                moment = await get_sun_event_time(p["sun_event"], int(p.get("sun_offset_minutes", 0)))
+                if moment and moment > now and moment.weekday() in weekdays:
+                    label = "Alba" if p["sun_event"] == "sunrise" else "Tramonto"
+                    events.append({"program_id": p["id"], "program_name": p["name"], "datetime": moment.isoformat(), "type": p["sun_event"], "label": f"{label} {int(p.get('sun_offset_minutes',0)):+d} min"})
+            except Exception:
+                pass
+    return sorted(events, key=lambda x: x["datetime"])[:500]
+
+
+@app.get("/api/weather-history")
+async def weather_history(limit: int = 300):
+    with db() as conn:
+        return [rowdict(r) for r in conn.execute(
+            "SELECT * FROM weather_history ORDER BY id DESC LIMIT ?", (min(max(limit, 1), 2000),)
+        )]
 
 
 @app.get("/api/logs")
