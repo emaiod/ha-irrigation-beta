@@ -2,10 +2,11 @@ function irrigationStatusLabel(status){
   return ({running:'In corso',completed:'Completata',error:'Errore',stopped:'Interrotta',skipped:'Saltata',disabled:'Disabilitata'})[status]||status||'—';
 }
 
-function irrigationLogMessage(row){
+function irrigationLogMessage(row,runtimeError='',useRuntimeError=false){
   const message=String(row.message||'').trim();
   if(message)return message;
-  if(row.status==='error')return 'Errore registrato senza dettaglio tecnico. Controlla anche il Registro dell’app subito dopo il tentativo.';
+  if(row.status==='error'&&useRuntimeError&&runtimeError)return String(runtimeError).trim();
+  if(row.status==='error')return 'Errore registrato senza dettaglio tecnico. Ripeti il tentativo: il nuovo registro conserverà e mostrerà il messaggio disponibile dal motore.';
   if(row.status==='running')return 'Irrigazione avviata. La riga conclusiva riporterà l’esito e l’eventuale errore.';
   return 'Nessuna nota.';
 }
@@ -25,17 +26,19 @@ async function loadLogs(){
   const target=document.querySelector('#logCards');
   const legacy=document.querySelector('#logRows');
   try{
-    const logs=await api('api/logs');
+    const [logs,state]=await Promise.all([api('api/logs'),api('api/state').catch(()=>({}))]);
+    const runtimeError=String(state.last_error||'').trim();
+    const firstBlankErrorIndex=logs.findIndex(row=>String(row.status||'').toLowerCase()==='error'&&!String(row.message||'').trim());
     if(legacy)legacy.innerHTML='';
     if(!target)return;
     if(!logs.length){
       target.innerHTML='<p class="muted">Nessuna irrigazione registrata.</p>';
       return;
     }
-    target.innerHTML=logs.map(row=>{
+    target.innerHTML=logs.map((row,index)=>{
       const status=String(row.status||'').toLowerCase();
       const isError=status==='error';
-      const message=irrigationLogMessage(row);
+      const message=irrigationLogMessage(row,runtimeError,index===firstBlankErrorIndex);
       const date=String(row.started_at||'').replace('T',' ');
       return `<article class="irrigation-log-card ${isError?'has-error':''}">
         <div class="irrigation-log-head">
