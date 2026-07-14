@@ -1,6 +1,6 @@
 name: "Irrigazione Centralizzata"
 description: "Programmazione e controllo dell'irrigazione tramite le entità di Home Assistant"
-version: "0.3.0"
+version: "0.3.1"
 slug: "irrigazione_centralizzata"
 url: "https://github.com/emaiod/ha-irrigation-beta"
 init: false
