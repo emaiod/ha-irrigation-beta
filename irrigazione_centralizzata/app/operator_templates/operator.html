@@ -1,51 +1,16 @@
 <!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Portale irrigazione</title>
-  <link rel="stylesheet" href="/operator/static/operator.css?v=0.3.0">
-</head>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portale irrigazione</title><link rel="stylesheet" href="/operator/static/operator.css?v=0.3.1"></head>
 <body>
 {% if not user %}
-<main class="login-shell">
-  <section class="card login-card">
-    <div class="brand">💧</div>
-    <h1>Portale irrigazione</h1>
-    <p class="muted">Accesso riservato agli operatori autorizzati.</p>
-    {% if login_error %}<p class="alert">Credenziali non valide o utente disattivato.</p>{% endif %}
-    <form method="post" action="/operator/login" class="login-form">
-      <label>Nome utente<input name="username" autocomplete="username" required autofocus></label>
-      <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
-      <button type="submit">Accedi</button>
-    </form>
-  </section>
-</main>
+<main class="login-shell"><section class="card login-card"><div class="brand">💧</div><h1>Portale irrigazione</h1><p class="muted">Accesso riservato agli operatori autorizzati.</p>{% if login_error %}<p class="alert">Credenziali non valide o utente disattivato.</p>{% endif %}<form method="post" action="/operator/login" class="login-form"><label>Nome utente<input name="username" autocomplete="username" required autofocus></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button type="submit">Accedi</button></form></section></main>
 {% else %}
-<header>
-  <div><strong>💧 Irrigazione</strong><small>{{ user.display_name }}</small></div>
-  <form method="post" action="/operator/logout"><button class="secondary" type="submit">Esci</button></form>
-</header>
+<header><div><strong>💧 Irrigazione</strong><small>{{ user.display_name }}</small></div><form method="post" action="/operator/logout"><button class="secondary" type="submit">Esci</button></form></header>
+<nav><button class="tab active" data-target="statusPanel">Stato</button><button class="tab" data-target="programsPanel">Programmi</button><button class="tab" data-target="zonesPanel">Zone</button></nav>
 <main>
-  <section class="status-grid">
-    <article class="card"><small>Stato</small><strong id="systemStatus">Caricamento…</strong></article>
-    <article class="card"><small>Programma</small><strong id="programName">Nessuno</strong></article>
-    <article class="card"><small>Zona attiva</small><strong id="zoneName">—</strong></article>
-    <article class="card"><small>Tempo rimanente</small><strong id="remaining">00:00</strong></article>
-  </section>
-
-  <section id="runtimeCard" class="card hidden">
-    <div class="section-head"><div><small>Programma in corso</small><h2 id="runtimeTitle">—</h2></div><button class="danger" id="stopButton">Arresta tutto</button></div>
-    <div id="runtimeSteps" class="steps"></div>
-  </section>
-
-  <section>
-    <div class="section-head"><div><small>Avvio manuale</small><h2>Programmi disponibili</h2></div></div>
-    <div id="programs" class="program-grid"></div>
-  </section>
-  <p id="pageError" class="alert hidden"></p>
-</main>
-<script src="/operator/static/operator.js?v=0.3.0"></script>
+<section id="statusPanel" class="panel active"><section class="status-grid"><article class="card"><small>Stato</small><strong id="systemStatus">Caricamento…</strong></article><article class="card"><small>Programma</small><strong id="programName">Nessuno</strong></article><article class="card"><small>Zona attiva</small><strong id="zoneName">—</strong></article><article class="card"><small>Tempo rimanente</small><strong id="remaining">00:00</strong></article></section><section id="runtimeCard" class="card hidden"><div class="section-head"><div><small>Programma in corso</small><h2 id="runtimeTitle">—</h2></div><button class="danger" id="stopButton">Arresta tutto</button></div><div id="runtimeSteps" class="steps"></div></section></section>
+<section id="programsPanel" class="panel"><div class="section-head"><div><small>Programmazione</small><h2>Programmi</h2></div></div><div id="programs" class="program-grid"></div></section>
+<section id="zonesPanel" class="panel"><div class="section-head"><div><small>Avvio manuale</small><h2>Singole zone</h2></div></div><div id="zones" class="program-grid"></div></section>
+<p id="pageError" class="alert hidden"></p>
+</main><script src="/operator/static/operator.js?v=0.3.1"></script>
 {% endif %}
-</body>
-</html>
+</body></html>
