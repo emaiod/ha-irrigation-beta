@@ -1,0 +1,17 @@
+run_program:
+  name: Run program
+  description: Start an irrigation program by its internal ID.
+  fields:
+    program_id:
+      name: Program ID
+      description: Internal ID of the irrigation program.
+      required: true
+      example: 0123456789abcdef
+      selector:
+        text:
+stop:
+  name: Stop irrigation
+  description: Stop the irrigation program currently running.
+skip_zone:
+  name: Skip current zone
+  description: Stop the current zone and continue with the next one.
