@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Irrigation Controller",
+        "description": "Create the native integration to manage irrigation zones, programs and schedules."
+      }
+    },
+    "abort": {
+      "already_configured": "Irrigation Controller is already configured."
+    }
+  }
+}
